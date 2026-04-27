@@ -1466,11 +1466,16 @@ function renderModels(snap) {
       platformBadge = `<div class="thumb-platforms">${dots}<span>${m.variants.length} platforms</span></div>`;
     }
 
-    const statDefs = [
+    const allStatDefs = [
       { key: 'downloads', lbl: 'dl' },
       { key: 'views',     lbl: 'views' },
       { key: 'likes',     lbl: 'likes' },
-    ].filter(s => (m[s.key] || 0) > 0 || s.key === currentSort).slice(0, 3);
+    ];
+    // Only show stats that are genuinely non-zero; if all are zero show the sort key as "—"
+    let statDefs = allStatDefs.filter(s => (m[s.key] || 0) > 0).slice(0, 3);
+    if (statDefs.length === 0) {
+      statDefs = allStatDefs.filter(s => s.key === currentSort);
+    }
 
     // Breakdown rows (only for multi-platform)
     let breakdownHtml = '';

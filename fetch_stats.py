@@ -92,10 +92,11 @@ def fetch_thingiverse(cfg):
     token = cfg["access_token"]
     base = "https://api.thingiverse.com"
 
-    totals = {"views": 0, "downloads": 0, "likes": 0}
     models = []
     page = 1
 
+    # Step 1: collect all thing IDs + basic info from the list endpoint
+    # (list endpoint returns 0 for view_count / download_count — detail call needed)
     while True:
         url = f"{base}/users/{username}/things?access_token={token}&page={page}&per_page=30"
         data = http_get(url)
@@ -103,27 +104,40 @@ def fetch_thingiverse(cfg):
             break
 
         for thing in data:
-            v = thing.get("view_count", 0) or 0
-            d = thing.get("download_count", 0) or 0
-            l = thing.get("like_count", 0) or 0
-            totals["views"] += v
-            totals["downloads"] += d
-            totals["likes"] += l
             models.append({
-                "id": thing.get("id"),
-                "name": thing.get("name", "Unknown"),
-                "url": thing.get("public_url", ""),
-                "views": v,
-                "downloads": d,
-                "likes": l,
+                "id":        thing.get("id"),
+                "name":      thing.get("name", "Unknown"),
+                "url":       thing.get("public_url", ""),
+                "likes":     thing.get("like_count", 0) or 0,
                 "thumbnail": thing.get("thumbnail", ""),
+                "views":     0,
+                "downloads": 0,
             })
 
-        print(f"  Page {page}: {len(data)} models")
+        print(f"  Page {page}: {len(data)} models (list pass)")
         if len(data) < 30:
             break
         page += 1
         time.sleep(0.5)
+
+    # Step 2: fetch each thing's detail to get real view_count / download_count
+    print(f"  Fetching detail for {len(models)} models...")
+    for i, m in enumerate(models):
+        detail_url = f"{base}/things/{m['id']}?access_token={token}"
+        detail = http_get(detail_url)
+        if detail:
+            m["views"]     = detail.get("view_count",     0) or 0
+            m["downloads"] = detail.get("download_count", 0) or 0
+            m["likes"]     = detail.get("like_count",     0) or 0
+        if (i + 1) % 10 == 0:
+            print(f"    {i + 1}/{len(models)} done")
+        time.sleep(0.25)
+
+    totals = {
+        "views":     sum(m["views"]     for m in models),
+        "downloads": sum(m["downloads"] for m in models),
+        "likes":     sum(m["likes"]     for m in models),
+    }
 
     print(f"  ✓ Thingiverse: {len(models)} models | {totals['views']} views | {totals['downloads']} downloads")
     return {"totals": totals, "models": models}
@@ -213,19 +227,38 @@ def fetch_printables(cfg):
 # MAKERWORLD
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _mw_post(url, body, headers, timeout=15):
+    """POST JSON to MakerWorld, return parsed response or None."""
+    payload = json.dumps(body).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=payload,
+        headers={**headers, "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body_txt = e.read().decode("utf-8", errors="replace")
+        print(f"    POST {e.code}: {body_txt[:120]}")
+        return None
+    except Exception as e:
+        print(f"    POST error: {e}")
+        return None
+
+
 def fetch_makerworld(cfg):
     print("Fetching MakerWorld...")
     token = cfg["auth_token"]
-    uid = cfg.get("user_id", "162313973")
+    uid   = cfg.get("user_id", "162313973")
 
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/json",
-    }
+    headers = {"Accept": "application/json", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
 
+    # ── profile (totals) ────────────────────────────────────────────────────
     profile_url = f"https://makerworld.com/api/v1/design-user-service/user/profile/{uid}"
     profile = http_get(profile_url, headers=headers)
-
     if not profile:
         print("  Could not fetch MakerWorld profile. Check your auth token.")
         return None
@@ -233,27 +266,112 @@ def fetch_makerworld(cfg):
     mw = profile.get("MWCount", {})
     totals = {
         "downloads": mw.get("myDesignDownloadCount", 0) or 0,
-        "views":     profile.get("collectionCount", 0) or 0,
+        "views":     mw.get("myDesignCollectedCount", 0) or profile.get("collectionCount", 0) or 0,
         "likes":     profile.get("likeCount", 0) or 0,
         "prints":    mw.get("myDesignPrintCount", 0) or 0,
     }
+    design_count = mw.get("designCount", 0)
 
-    # Build model list from pinned/featured designs in profile
-    models = []
-    for m in profile.get("personal", {}).get("designsInfo", []):
-        mid = m.get("id", "")
-        models.append({
-            "id": mid,
-            "name": m.get("title") or m.get("name", "Unknown"),
-            "url": f"https://makerworld.com/en/models/{mid}",
-            "views": 0,
-            "downloads": 0,
-            "likes": 0,
-            "prints": 0,
-            "thumbnail": m.get("cover", ""),
-        })
+    # ── paginate all designs ─────────────────────────────────────────────────
+    # MakerWorld uses a POST endpoint for design listing with cursor/page params.
+    # Try multiple body shapes until one returns a usable list.
+    page_url  = "https://makerworld.com/api/v1/design-service/design/page"
+    page_size = 20
+    models    = []
+    page      = 1
+    found_endpoint = False
 
-    print(f"  ✓ MakerWorld: {mw.get('designCount', 0)} models | {totals['downloads']} downloads | {totals['prints']} prints")
+    body_templates = [
+        {"designerId": int(uid),  "page": page, "pageSize": page_size, "keyword": ""},
+        {"designerId": str(uid),  "page": page, "pageSize": page_size, "keyword": ""},
+        {"creatorId":  int(uid),  "page": page, "pageSize": page_size},
+        {"uid":        int(uid),  "page": page, "pageSize": page_size},
+    ]
+
+    def _parse_mw_batch(items):
+        out = []
+        for m in items:
+            mid = str(m.get("id", m.get("designId", "")))
+            out.append({
+                "id":        mid,
+                "name":      m.get("title") or m.get("name", "Unknown"),
+                "url":       f"https://makerworld.com/en/models/{mid}",
+                "views":     m.get("collectCount", 0) or 0,
+                "downloads": m.get("downloadCount", 0) or m.get("download_count", 0) or 0,
+                "likes":     m.get("likeCount", 0) or m.get("like_count", 0) or 0,
+                "prints":    m.get("printCount", 0) or 0,
+                "thumbnail": m.get("cover", "") or m.get("coverUrl", "") or m.get("thumbnail", ""),
+            })
+        return out
+
+    # probe: find which body shape works on page 1
+    working_body = None
+    working_key  = None
+    for tmpl in body_templates:
+        resp = _mw_post(page_url, tmpl, headers)
+        if resp and isinstance(resp, dict):
+            for candidate_key in ("list", "items", "designs", "data", "content"):
+                if isinstance(resp.get(candidate_key), list) and len(resp[candidate_key]) > 0:
+                    working_key  = candidate_key
+                    working_body = dict(tmpl)  # snapshot the winning template
+                    print(f"    Found working endpoint (result_key={working_key})")
+                    found_endpoint = True
+                    models.extend(_parse_mw_batch(resp[working_key]))
+                    break
+        if found_endpoint:
+            break
+
+    if found_endpoint:
+        # fetch remaining pages using the same body shape, just incrementing page
+        page = 2
+        while len(models) < design_count:
+            body = {**working_body, "page": page}
+            resp = _mw_post(page_url, body, headers)
+            if not resp:
+                break
+            batch = resp.get(working_key, [])
+            if not batch:
+                break
+            models.extend(_parse_mw_batch(batch))
+            print(f"    Page {page}: {len(batch)} models (total: {len(models)})")
+            if len(batch) < page_size:
+                break
+            page += 1
+            time.sleep(0.3)
+    else:
+        # Fallback: fetch individual detail for pinned + featured designs
+        # (individual detail endpoint is public — no auth needed)
+        print("  WARNING: Paginated design list requires auth. Falling back to pinned designs with detail calls.")
+        print("  Set MW_AUTH_TOKEN env var and re-run to get all 97 designs.")
+
+        personal = profile.get("personal", {})
+        pinned_ids = personal.get("pinnedDesigns", [])
+        featured   = personal.get("designsInfo", [])
+        # combine pinned IDs with featured IDs, deduplicating
+        all_ids = list({str(m.get("id", "")): m for m in featured}.keys())
+        for pid in pinned_ids:
+            if str(pid) not in all_ids:
+                all_ids.append(str(pid))
+
+        detail_url = "https://makerworld.com/api/v1/design-service/design/{id}"
+        for mid in all_ids:
+            if not mid:
+                continue
+            detail = http_get(detail_url.format(id=mid))
+            if detail:
+                models.append({
+                    "id":        mid,
+                    "name":      detail.get("title") or detail.get("name", "Unknown"),
+                    "url":       f"https://makerworld.com/en/models/{mid}",
+                    "views":     detail.get("collectCount", 0) or 0,
+                    "downloads": detail.get("downloadCount", 0) or 0,
+                    "likes":     detail.get("likeCount", 0) or 0,
+                    "prints":    detail.get("printCount", 0) or 0,
+                    "thumbnail": detail.get("cover", "") or detail.get("coverUrl", ""),
+                })
+            time.sleep(0.2)
+
+    print(f"  ✓ MakerWorld: {len(models)}/{design_count} models | {totals['downloads']} downloads | {totals['prints']} prints")
     return {"totals": totals, "models": models}
 
 
