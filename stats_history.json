@@ -921,7 +921,7 @@
     },
     {
       "date": "2026-04-27",
-      "timestamp": "2026-04-27T13:24:36.340777",
+      "timestamp": "2026-04-27T18:07:30.798159",
       "platforms": {
         "thingiverse": {
           "totals": {
@@ -1788,10 +1788,10 @@
         },
         "makerworld": {
           "totals": {
-            "downloads": 7858,
+            "downloads": 7860,
             "views": 7256,
-            "likes": 3070,
-            "prints": 4262
+            "likes": 3072,
+            "prints": 4263
           },
           "models": [
             {
@@ -2586,5 +2586,5 @@
     }
   ],
   "config": {},
-  "last_updated": "2026-04-27T13:24:36.340777"
+  "last_updated": "2026-04-27T18:07:30.798159"
 }
