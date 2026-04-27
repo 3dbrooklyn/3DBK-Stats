@@ -71,13 +71,10 @@ header {
   display: block;
 }
 
-.brand-text h1 {
-  font-family: var(--brand);
-  font-size: 1.85rem;
-  font-weight: normal;
-  letter-spacing: 0.02em;
-  line-height: 1;
-  color: var(--text);
+.brand-logo {
+  height: 36px;
+  width: auto;
+  display: block;
 }
 
 .brand-text .subtitle {
@@ -889,7 +886,7 @@ main {
   header, .time-bar, main { padding-left: 16px; padding-right: 16px; }
   .cal-months-row { flex-direction: column; }
   .models-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
-  .brand-text h1 { font-size: 1.4rem; }
+  .brand-logo { height: 28px; }
 }
 
 @media (max-width: 480px) {
@@ -906,7 +903,7 @@ main {
   <div class="brand">
     <img src="3DBrooklyn%20Branding/Badge%20Logo%20Red%20Square.png" class="brand-badge" alt="3DBK">
     <div class="brand-text">
-      <h1>3DBROOKLYN</h1>
+      <img src="3DBrooklyn%20Branding/Text%20Logo%20White.png" class="brand-logo" alt="3DBROOKLYN">
       <p class="subtitle">Print Stats Dashboard</p>
     </div>
   </div>
@@ -1223,6 +1220,13 @@ function renderPlatforms(snap) {
                 : p === 'myminifactory' ? { label: 'Likes',  val: (t.likes   || 0).toLocaleString() }
                 :                         { label: 'Models', val: mc };
 
+    // MakerWorld "views" is actually collections/saves; MMF has no download data
+    const dlLabel  = 'Downloads';
+    const dlVal    = p === 'myminifactory' ? '<span style="color:var(--muted)">N/A</span>'
+                                           : `<span style="color:${color}">${(t.downloads||0).toLocaleString()}</span>`;
+    const vwLabel  = p === 'makerworld' ? 'Saves' : 'Views';
+    const vwVal    = (t.views || 0).toLocaleString();
+
     html += `
       <div class="platform-card">
         <div class="platform-card-header">
@@ -1234,12 +1238,12 @@ function renderPlatforms(snap) {
         </div>
         <div class="platform-stats-row">
           <div class="p-stat">
-            <div class="p-stat-label">Downloads</div>
-            <div class="p-stat-value" style="color:${color}">${(t.downloads||0).toLocaleString()}</div>
+            <div class="p-stat-label">${dlLabel}</div>
+            <div class="p-stat-value">${dlVal}</div>
           </div>
           <div class="p-stat">
-            <div class="p-stat-label">Views</div>
-            <div class="p-stat-value" style="color:${color}">${(t.views||0).toLocaleString()}</div>
+            <div class="p-stat-label">${vwLabel}</div>
+            <div class="p-stat-value" style="color:${color}">${vwVal}</div>
           </div>
           <div class="p-stat">
             <div class="p-stat-label">${third.label}</div>
