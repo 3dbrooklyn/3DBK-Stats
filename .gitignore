@@ -1,0 +1,5 @@
+desktop.ini
+__pycache__/
+*.pyc
+thangs_test.csv
+thangs_import.csv

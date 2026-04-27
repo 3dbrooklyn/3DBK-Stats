@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(start \"\" \"C:\\\\Users\\\\whaud\\\\Google Drive Streaming\\\\My Drive\\\\Print Queue\\\\3d_stats_dashboard\\\\dashboard.html\")",
+      "Read(//c/Users/whaud/Google Drive Streaming/My Drive/**)"
+    ]
+  }
+}
