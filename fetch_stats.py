@@ -26,7 +26,7 @@ CONFIG = {
     "thingiverse": {
         "enabled": True,
         "username":     os.environ.get("TV_USERNAME",     "3DBrooklyn"),
-        "access_token": os.environ.get("TV_ACCESS_TOKEN", "18e202ccdaa399fd401ad644c206ff09"),
+        "access_token": os.environ.get("TV_ACCESS_TOKEN", ""),
     },
     "printables": {
         "enabled": True,
@@ -36,12 +36,12 @@ CONFIG = {
     "makerworld": {
         "enabled": True,
         "username":   os.environ.get("MW_USERNAME",   "3DBrooklyn"),
-        "auth_token": os.environ.get("MW_AUTH_TOKEN", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVc2VySUQiOiIxNjIzMTM5NzMiLCJQbGF0Zm9ybUlEIjo1LCJleHAiOjE3ODQ2ODY1NzUsIm5iZiI6MTc2OTEzNDI3NSwiaWF0IjoxNzY5MTM0NTc1fQ.hfLVd0VVrfEdwO5T19WYPC7id2zFSsb6HjDwG5WYPPk"),
+        "auth_token": os.environ.get("MW_AUTH_TOKEN", ""),
     },
     "myminifactory": {
         "enabled": True,
         "username": os.environ.get("MMF_USERNAME", "3DBrooklyn"),
-        "api_key":  os.environ.get("MMF_API_KEY",  "4ef253f6-408b-4d16-ae6a-a72406f46163"),
+        "api_key":  os.environ.get("MMF_API_KEY",  ""),
     },
 }
 
