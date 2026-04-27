@@ -2,7 +2,7 @@ name: Fetch 3D Print Stats
 
 on:
   schedule:
-    - cron: '0 17 * * *'  # 1 PM EDT (UTC-4) — shifts to noon in winter
+    - cron: '0 14 * * *'  # 10 AM EDT (UTC-4) — shifts to 9 AM in winter
   workflow_dispatch:       # lets you trigger it manually from GitHub too
 
 permissions:
